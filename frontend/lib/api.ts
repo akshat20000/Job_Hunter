@@ -11,6 +11,9 @@ export interface ApiApplication {
   status: string;
   appliedAt: string | null;
   createdAt: string;
+  errorDetails: string | null;
+  hasResumeArtifact: boolean;
+  hasCoverLetterArtifact: boolean;
   job: {
     id: string;
     title: string;
@@ -106,6 +109,28 @@ export async function getResumes(userId: string): Promise<Resume[]> {
   });
   if (!res.ok) throw new Error('Failed to fetch resumes');
   return res.json();
+}
+
+export async function setActiveResume(userId: string, resumeId: string): Promise<void> {
+  const res = await fetch(`${API_BASE}/api/me/resumes/${resumeId}/activate`, {
+    method: 'PATCH',
+    headers: headers(userId),
+  });
+  if (!res.ok) {
+    const err = await res.json();
+    throw new Error(err.error ?? 'Failed to set active resume');
+  }
+}
+
+export async function deleteResume(userId: string, resumeId: string): Promise<void> {
+  const res = await fetch(`${API_BASE}/api/me/resumes/${resumeId}`, {
+    method: 'DELETE',
+    headers: headers(userId),
+  });
+  if (!res.ok) {
+    const err = await res.json();
+    throw new Error(err.error ?? 'Failed to delete resume');
+  }
 }
 
 export async function approveApplication(

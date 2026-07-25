@@ -1,8 +1,10 @@
 import { Router, Request, Response } from 'express';
+import path from 'path';
+import fs from 'fs';
 import { requireUserId, AuthenticatedRequest } from '../middleware/auth.js';
 import { ApplicationRepository } from '../../repositories/applicationRepository.js';
 import { applyQueue } from '../../queue/jobQueues.js';
-import { prisma } from '../../config/index.js';
+import { prisma, env } from '../../config/index.js';
 
 const router = Router();
 const appRepo = new ApplicationRepository();
@@ -21,6 +23,9 @@ router.get('/', requireUserId, async (req: Request, res: Response) => {
         status: a.status,
         appliedAt: a.appliedAt,
         createdAt: a.createdAt,
+        errorDetails: a.errorDetails,
+        hasResumeArtifact: Boolean(a.resumePath),
+        hasCoverLetterArtifact: Boolean(a.coverLetterPath),
         job: {
           id: a.job.id,
           title: a.job.title,
@@ -54,6 +59,56 @@ router.get('/:id', requireUserId, async (req: Request, res: Response) => {
       return;
     }
     res.json(app);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * GET /api/me/applications/:jobId/artifacts/:type
+ * Streams the generated resume or cover letter PDF for a given application,
+ * scoped to the authenticated user. `type` must be "resume" or "cover-letter".
+ */
+router.get('/:jobId/artifacts/:type', requireUserId, async (req: Request, res: Response) => {
+  const { userId } = req as AuthenticatedRequest;
+  const jobId = req.params['jobId'] as string;
+  const type = req.params['type'] as string;
+
+  if (type !== 'resume' && type !== 'cover-letter') {
+    res.status(400).json({ error: 'type must be "resume" or "cover-letter".' });
+    return;
+  }
+
+  try {
+    const app = await appRepo.findByUserAndJobId(userId, jobId);
+    if (!app) {
+      res.status(404).json({ error: 'Application not found.' });
+      return;
+    }
+
+    const filePath = type === 'resume' ? app.resumePath : app.coverLetterPath;
+    if (!filePath) {
+      res.status(404).json({ error: 'This artifact has not been generated yet.' });
+      return;
+    }
+
+    // Defense in depth: only ever serve files that live under STORAGE_DIR.
+    const resolved = path.resolve(filePath);
+    const storageRoot = path.resolve(env.STORAGE_DIR);
+    if (!resolved.startsWith(storageRoot + path.sep)) {
+      res.status(400).json({ error: 'Invalid artifact path.' });
+      return;
+    }
+
+    if (!fs.existsSync(resolved)) {
+      res.status(404).json({ error: 'Artifact file is missing on disk.' });
+      return;
+    }
+
+    const filename = `${type}-${app.job.title.replace(/[^a-z0-9]+/gi, '_')}.pdf`;
+    res.setHeader('Content-Disposition', `inline; filename="${filename}"`);
+    res.setHeader('Content-Type', 'application/pdf');
+    fs.createReadStream(resolved).pipe(res);
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }

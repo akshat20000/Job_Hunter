@@ -59,6 +59,7 @@ export default function DashboardClient({ applications: initialApplications, usa
   const { data: session } = useSession();
   const userId = (session?.user as any)?.id as string | undefined;
   const [filter, setFilter] = useState<Filter>('all');
+  const [query, setQuery] = useState('');
   const [approving, setApproving] = useState<string | null>(null);
   const [message, setMessage] = useState<{ text: string; type: 'ok' | 'err' } | null>(null);
   const [searching, setSearching] = useState(false);
@@ -90,14 +91,20 @@ export default function DashboardClient({ applications: initialApplications, usa
     return () => clearInterval(id);
   }, [userId, refresh]);
 
-  const filtered = applications.filter(a => {
-    if (filter === 'all') return true;
-    if (filter === 'matched') return ['MATCHED', 'TAILORED'].includes(a.status);
-    if (filter === 'ready') return a.status === 'READY';
-    if (filter === 'applied') return a.status === 'APPLIED';
-    if (filter === 'failed') return a.status === 'FAILED';
-    return true;
-  });
+  const filtered = applications
+    .filter(a => {
+      if (filter === 'all') return true;
+      if (filter === 'matched') return ['MATCHED', 'TAILORED'].includes(a.status);
+      if (filter === 'ready') return a.status === 'READY';
+      if (filter === 'applied') return a.status === 'APPLIED';
+      if (filter === 'failed') return a.status === 'FAILED';
+      return true;
+    })
+    .filter(a => {
+      if (!query.trim()) return true;
+      const q = query.trim().toLowerCase();
+      return a.job.title.toLowerCase().includes(q) || a.job.company.name.toLowerCase().includes(q);
+    });
 
   // Stat counts
   const counts = {
@@ -129,6 +136,10 @@ export default function DashboardClient({ applications: initialApplications, usa
 
   async function handleApprove(app: ApiApplication) {
     if (!userId) return;
+    const confirmed = window.confirm(
+      `Submit an application to ${app.job.company.name} for "${app.job.title}" using the AI-tailored resume and cover letter? This will be sent automatically and can't be undone.`
+    );
+    if (!confirmed) return;
     setApproving(app.job.id);
     setMessage(null);
     try {
@@ -151,6 +162,25 @@ export default function DashboardClient({ applications: initialApplications, usa
       setMessage({ text: err.message, type: 'err' });
     } finally {
       setApproving(null);
+    }
+  }
+
+  async function handleViewArtifact(jobId: string, type: 'resume' | 'cover-letter') {
+    if (!userId) return;
+    try {
+      const res = await fetch(
+        `${process.env.NEXT_PUBLIC_AUTOMATION_API ?? 'http://localhost:3001'}/api/me/applications/${jobId}/artifacts/${type}`,
+        { headers: { 'X-User-Id': userId } }
+      );
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error ?? 'Failed to load artifact.');
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      window.open(url, '_blank', 'noopener,noreferrer');
+    } catch (err: any) {
+      setMessage({ text: err.message, type: 'err' });
     }
   }
 
@@ -253,22 +283,33 @@ export default function DashboardClient({ applications: initialApplications, usa
         )}
 
         {/* Filter tabs */}
-        <div className="filter-tabs">
-          {(['all', 'matched', 'ready', 'applied', 'failed'] as Filter[]).map(f => (
-            <button
-              key={f}
-              id={`filter-${f}`}
-              className={`filter-tab ${filter === f ? 'active' : ''}`}
-              onClick={() => setFilter(f)}
-            >
-              {f.charAt(0).toUpperCase() + f.slice(1)}
-              {f !== 'all' && (
-                <span style={{ marginLeft: 6, opacity: 0.6 }}>
-                  ({f === 'matched' ? counts.matched : f === 'ready' ? counts.ready : f === 'applied' ? counts.applied : applications.filter(a => a.status === 'FAILED').length})
-                </span>
-              )}
-            </button>
-          ))}
+        <div className="flex items-center justify-between" style={{ gap: 16, flexWrap: 'wrap' }}>
+          <div className="filter-tabs">
+            {(['all', 'matched', 'ready', 'applied', 'failed'] as Filter[]).map(f => (
+              <button
+                key={f}
+                id={`filter-${f}`}
+                className={`filter-tab ${filter === f ? 'active' : ''}`}
+                onClick={() => setFilter(f)}
+              >
+                {f.charAt(0).toUpperCase() + f.slice(1)}
+                {f !== 'all' && (
+                  <span style={{ marginLeft: 6, opacity: 0.6 }}>
+                    ({f === 'matched' ? counts.matched : f === 'ready' ? counts.ready : f === 'applied' ? counts.applied : applications.filter(a => a.status === 'FAILED').length})
+                  </span>
+                )}
+              </button>
+            ))}
+          </div>
+          <input
+            id="job-search-input"
+            type="text"
+            placeholder="Search by title or company…"
+            value={query}
+            onChange={e => setQuery(e.target.value)}
+            className="form-input"
+            style={{ maxWidth: 260 }}
+          />
         </div>
 
         {/* Job list */}
@@ -296,6 +337,33 @@ export default function DashboardClient({ applications: initialApplications, usa
                     <p style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 6, maxWidth: 600 }}>
                       {app.job.fitExplanation.slice(0, 120)}{app.job.fitExplanation.length > 120 ? '…' : ''}
                     </p>
+                  )}
+                  {app.status === 'FAILED' && app.errorDetails && (
+                    <p style={{ fontSize: 12, color: 'var(--red)', marginTop: 6, maxWidth: 600 }}>
+                      ⚠️ {app.errorDetails}
+                    </p>
+                  )}
+                  {(app.hasResumeArtifact || app.hasCoverLetterArtifact) && (
+                    <div style={{ display: 'flex', gap: 12, marginTop: 6 }}>
+                      {app.hasResumeArtifact && (
+                        <button
+                          type="button"
+                          onClick={() => handleViewArtifact(app.job.id, 'resume')}
+                          style={{ fontSize: 12, color: 'var(--accent)', background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}
+                        >
+                          📄 View tailored resume
+                        </button>
+                      )}
+                      {app.hasCoverLetterArtifact && (
+                        <button
+                          type="button"
+                          onClick={() => handleViewArtifact(app.job.id, 'cover-letter')}
+                          style={{ fontSize: 12, color: 'var(--accent)', background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}
+                        >
+                          ✉️ View cover letter
+                        </button>
+                      )}
+                    </div>
                   )}
                 </div>
 

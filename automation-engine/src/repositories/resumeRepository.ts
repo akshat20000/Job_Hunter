@@ -41,4 +41,35 @@ export class ResumeRepository extends BaseRepository {
   async findById(id: string): Promise<Resume | null> {
     return this.prisma.resume.findUnique({ where: { id } });
   }
+
+  /**
+   * Mark the given resume as the active one for its owner, deactivating any
+   * other resume that user has. Throws if the resume doesn't belong to the user.
+   */
+  async setActive(userId: string, resumeId: string): Promise<Resume> {
+    const resume = await this.prisma.resume.findUnique({ where: { id: resumeId } });
+    if (!resume || resume.userId !== userId) {
+      throw new Error('Resume not found.');
+    }
+    await this.prisma.resume.updateMany({
+      where: { userId },
+      data: { isActive: false },
+    });
+    return this.prisma.resume.update({
+      where: { id: resumeId },
+      data: { isActive: true },
+    });
+  }
+
+  /**
+   * Delete a resume owned by the given user. Returns the deleted row so the
+   * caller can also clean up the underlying S3 object.
+   */
+  async delete(userId: string, resumeId: string): Promise<Resume> {
+    const resume = await this.prisma.resume.findUnique({ where: { id: resumeId } });
+    if (!resume || resume.userId !== userId) {
+      throw new Error('Resume not found.');
+    }
+    return this.prisma.resume.delete({ where: { id: resumeId } });
+  }
 }

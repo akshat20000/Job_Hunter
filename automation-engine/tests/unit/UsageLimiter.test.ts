@@ -1,10 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { UsageLimiter, DailyLimitExceededError } from '../../src/domain/UsageLimiter.js';
 
-// Mock the ApplicationRepository to avoid DB connections in unit tests
-vi.mock('../../src/repositories/applicationRepository.js', () => ({
-  ApplicationRepository: vi.fn().mockImplementation(() => ({
-    countTodayApplications: vi.fn(),
+// Mock the SearchRunRepository to avoid DB connections in unit tests
+vi.mock('../../src/repositories/searchRunRepository.js', () => ({
+  SearchRunRepository: vi.fn().mockImplementation(() => ({
+    countToday: vi.fn(),
   })),
 }));
 
@@ -22,7 +22,7 @@ describe('UsageLimiter', () => {
     vi.clearAllMocks();
     limiter = new UsageLimiter();
     // Access the mocked instance's method
-    mockCountToday = (limiter as any).appRepo.countTodayApplications;
+    mockCountToday = (limiter as any).searchRunRepo.countToday;
   });
 
   describe('FREE plan (limit = 4)', () => {
@@ -39,7 +39,7 @@ describe('UsageLimiter', () => {
     it('should reject when over limit', async () => {
       mockCountToday.mockResolvedValue(10);
       await expect(limiter.check('user-1', 'FREE')).rejects.toThrow(
-        'Daily application limit reached for FREE plan: 10/4 used today'
+        'Daily search limit reached for FREE plan: 10/4 used today'
       );
     });
 

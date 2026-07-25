@@ -2,59 +2,63 @@ import {
   S3Client,
   PutObjectCommand,
   GetObjectCommand,
-  PutObjectCommandInput,
+  DeleteObjectCommand,
 } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { env } from '../config/index.js';
 
-function createS3Client(): S3Client {
-  const config: ConstructorParameters<typeof S3Client>[0] = {
-    region: env.S3_REGION,
-    credentials: {
-      accessKeyId: env.AWS_ACCESS_KEY_ID,
-      secretAccessKey: env.AWS_SECRET_ACCESS_KEY,
-    },
-  };
+// Single shared S3 client. Works against real AWS S3 in production and
+// against a local MinIO instance in development (via S3_ENDPOINT +
+// forcePathStyle, which MinIO requires).
+export const s3Client = new S3Client({
+  region: env.S3_REGION,
+  ...(env.S3_ENDPOINT ? { endpoint: env.S3_ENDPOINT, forcePathStyle: true } : {}),
+  credentials: {
+    accessKeyId: env.AWS_ACCESS_KEY_ID,
+    secretAccessKey: env.AWS_SECRET_ACCESS_KEY,
+  },
+});
 
-  // When S3_ENDPOINT is set (e.g. MinIO in dev), use path-style URLs
-  if (env.S3_ENDPOINT) {
-    config.endpoint = env.S3_ENDPOINT;
-    config.forcePathStyle = true;
-  }
-
-  return new S3Client(config);
-}
-
-export const s3Client = createS3Client();
-
-/**
- * Upload a buffer or stream to S3/MinIO.
- * Returns the S3 object key (not a signed URL).
- */
-export async function uploadToS3(params: {
+interface UploadParams {
   key: string;
-  body: Buffer | Uint8Array;
+  body: Buffer;
   contentType: string;
-}): Promise<string> {
-  const input: PutObjectCommandInput = {
-    Bucket: env.S3_BUCKET_NAME,
-    Key: params.key,
-    Body: params.body,
-    ContentType: params.contentType,
-  };
-
-  await s3Client.send(new PutObjectCommand(input));
-  return params.key;
 }
 
 /**
- * Generate a pre-signed GET URL for a private S3 object.
- * Default expiry: 1 hour (3600 seconds).
+ * Upload a file buffer to the configured S3/MinIO bucket under the given key.
  */
-export async function getPresignedUrl(key: string, expiresIn = 3600): Promise<string> {
+export async function uploadToS3({ key, body, contentType }: UploadParams): Promise<void> {
+  await s3Client.send(
+    new PutObjectCommand({
+      Bucket: env.S3_BUCKET_NAME,
+      Key: key,
+      Body: body,
+      ContentType: contentType,
+    })
+  );
+}
+
+/**
+ * Generate a time-limited pre-signed download URL for an object.
+ */
+export async function getPresignedUrl(key: string, expiresInSeconds = 3600): Promise<string> {
   const command = new GetObjectCommand({
     Bucket: env.S3_BUCKET_NAME,
     Key: key,
   });
-  return getSignedUrl(s3Client, command, { expiresIn });
+  return getSignedUrl(s3Client, command, { expiresIn: expiresInSeconds });
+}
+
+/**
+ * Permanently remove an object from the bucket (e.g. when a user deletes an
+ * old resume). Safe to call even if the object no longer exists.
+ */
+export async function deleteFromS3(key: string): Promise<void> {
+  await s3Client.send(
+    new DeleteObjectCommand({
+      Bucket: env.S3_BUCKET_NAME,
+      Key: key,
+    })
+  );
 }

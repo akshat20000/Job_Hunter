@@ -2,11 +2,11 @@ name: CI - Brain Engine
 
 on:
   push:
-    branches: [ main, dev ]
+    branches: [ main ]
     paths:
       - 'brain-engine/**'
   pull_request:
-    branches: [ main, dev ]
+    branches: [ main ]
     paths:
       - 'brain-engine/**'
 
@@ -14,26 +14,38 @@ jobs:
   test:
     runs-on: ubuntu-latest
 
+    defaults:
+      run:
+        working-directory: ./brain-engine
+
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout Code
+        uses: actions/checkout@v4
 
-      - name: Install System Dependencies (LaTeX)
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y texlive-latex-base texlive-latex-extra texlive-fonts-recommended
-
-      - name: Set up Python
+      - name: Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
           cache: 'pip'
+          cache-dependency-path: 'brain-engine/requirements*.txt'
 
-      - name: Install Python Dependencies
+      - name: Cache HuggingFace embedding model
+        # sentence-transformers downloads all-MiniLM-L6-v2 (~80MB) on first
+        # use. pip's cache does not cover this, so without a dedicated cache
+        # every CI run re-downloads the model from the Hub.
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/huggingface
+          key: ${{ runner.os }}-hf-all-MiniLM-L6-v2
+
+      - name: Install Dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r brain-engine/requirements.txt
-          pip install -r brain-engine/requirements-dev.txt
+          if [ -f requirements-dev.txt ]; then pip install -r requirements-dev.txt; fi
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
 
-      - name: Run Pytest
-        run: pytest
-        working-directory: ./brain-engine
+      - name: Run Brain Engine Tests
+        run: python -m pytest
+        env:
+          PYTHONPATH: .
+          TESTING: "True"

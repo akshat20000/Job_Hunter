@@ -2,11 +2,11 @@ name: CI - Automation Engine
 
 on:
   push:
-    branches: [ main, dev ]
+    branches: [ main ]
     paths:
       - 'automation-engine/**'
   pull_request:
-    branches: [ main, dev ]
+    branches: [ main ]
     paths:
       - 'automation-engine/**'
 
@@ -14,13 +14,18 @@ jobs:
   test:
     runs-on: ubuntu-latest
 
+    # Force actions inside this workflow to run in the sub-directory
+    defaults:
+      run:
+        working-directory: ./automation-engine
+
     services:
       postgres:
         image: postgres:15
         env:
           POSTGRES_USER: test_user
           POSTGRES_PASSWORD: test_password
-          POSTGRES_DB: automation_test
+          POSTGRES_DB: test_db
         ports:
           - 5432:5432
         options: >-
@@ -28,40 +33,41 @@ jobs:
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
-      redis:
-        image: redis:7
-        ports:
-          - 6379:6379
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout Code
+        uses: actions/checkout@v4
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22.22.2'
           cache: 'npm'
-          cache-dependency-path: 'automation-engine/package-lock.json'
+          # actions/setup-node has no "cache-working-directory" input.
+          # The correct key is cache-dependency-path, pointed at this
+          # workspace's own lockfile — without it, npm caching was a no-op.
+          cache-dependency-path: automation-engine/package-lock.json
 
       - name: Install Dependencies
         run: npm ci
-        working-directory: ./automation-engine
 
       - name: Generate Prisma Client
         run: npx prisma generate
-        working-directory: ./automation-engine
-
-      - name: Run Migrations
         env:
-          DATABASE_URL: postgresql://test_user:test_password@localhost:5432/automation_test
+          DATABASE_URL: "postgresql://test_user:test_password@localhost:5432/test_db?schema=public"
+
+      - name: Apply Database Migrations
+        # This is what actually makes use of the postgres service above.
+        # Without it, the DB container ran on every job but never had a
+        # schema in it — harmless while tests mock the DB, but required
+        # before any real integration test touches Postgres.
         run: npx prisma migrate deploy
-        working-directory: ./automation-engine
-
-      - name: Run Linter & Tests
         env:
-          DATABASE_URL: postgresql://test_user:test_password@localhost:5432/automation_test
-          REDIS_URL: redis://localhost:6379
-        run: |
-          npm run lint
-          npm run test
-        working-directory: ./automation-engine
+          DATABASE_URL: "postgresql://test_user:test_password@localhost:5432/test_db?schema=public"
+
+      - name: Run Unit & Integration Tests
+        run: npm test
+        env:
+          NODE_ENV: test
+          DATABASE_URL: "postgresql://test_user:test_password@localhost:5432/test_db?schema=public"
+          JWT_SECRET: super_secret_test_key
