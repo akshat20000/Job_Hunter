@@ -29,7 +29,7 @@ graph TD
   M -->|Sends SMTP Email outcome| N[Candidate Inbox]
 ```
 
-- **`automation-engine/`**:  TypeScript backend orchestrating pipeline stages via BullMQ job queues and workers. Integrates Playwright browser scripts and Prisma client databases.
+- **`automation-engine/`**: TypeScript backend orchestrating pipeline stages via BullMQ job queues and workers. Integrates Playwright browser scripts and Prisma client databases.
 - **`brain-engine/`**: Python/FastAPI service hosting the semantic search vector calculator (local MiniLM-L6) and API call completions to Groq for tailoring documents and compiling PDFs.
 
 ---
