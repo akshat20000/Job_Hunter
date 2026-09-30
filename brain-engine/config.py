@@ -3,7 +3,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
     GROQ_API_KEY: str = ""
-    GROQ_MODEL: str = "llama-3.3-70b-versatile"
+    GROQ_MODEL: str = "qwen/qwen3.8-27b"
     EMBEDDING_MODEL_NAME: str = "all-MiniLM-L6-v2"
     SEMANTIC_PREFILTER_THRESHOLD: float = 0.30
 

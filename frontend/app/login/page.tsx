@@ -26,6 +26,28 @@ export default function LoginPage() {
     if (result?.error) {
       setError('Invalid email or password. Please try again.');
     } else {
+      // Check if user has completed onboarding
+      try {
+        const statusRes = await fetch('/api/proxy/me/onboarding/status');
+        if (statusRes.ok) {
+          const statusData = await statusRes.json();
+          if (!statusData.onboardingCompleted) {
+            router.push('/onboarding');
+            return;
+          }
+        }
+      } catch {}
+
+      // Fallback check session
+      try {
+        const sessionRes = await fetch('/api/auth/session');
+        const sessionData = await sessionRes.json();
+        if (sessionData?.user && sessionData.user.onboardingCompleted === false) {
+          router.push('/onboarding');
+          return;
+        }
+      } catch {}
+
       router.push('/dashboard');
     }
   }

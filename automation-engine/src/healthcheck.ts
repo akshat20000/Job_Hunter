@@ -1,9 +1,6 @@
 import http from 'http';
-import fs from 'fs';
-import path from 'path';
 import { env, prisma } from './config/index.js';
 import { redisConnection } from './queue/connection.js';
-import { applyQueue } from './queue/jobQueues.js';
 import { register } from './monitoring/metrics.js';
 
 function sendJson(res: http.ServerResponse, status: number, body: unknown) {
@@ -11,29 +8,24 @@ function sendJson(res: http.ServerResponse, status: number, body: unknown) {
   res.end(JSON.stringify(body));
 }
 
-function servePdf(res: http.ServerResponse, filePath: string | null) {
-  if (!filePath || !fs.existsSync(filePath)) {
-    sendJson(res, 404, { error: 'File not found' });
-    return;
-  }
-  res.writeHead(200, { 'Content-Type': 'application/pdf' });
-  fs.createReadStream(filePath).pipe(res);
-}
-
-async function listJobs() {
-  return prisma.job.findMany({
-    include: { company: true, applications: true },
-    orderBy: [{ score: 'desc' }, { createdAt: 'desc' }],
-    take: 200,
-  });
-}
-
+/**
+ * Healthcheck and metrics-only HTTP server.
+ *
+ * SECURITY FIX: All legacy unauthenticated API endpoints (/api/jobs,
+ * /api/jobs/:id/approve, /api/jobs/:id/resume, /api/jobs/:id/cover-letter)
+ * have been removed. Those operations are now exclusively available through
+ * the authenticated multi-tenant API on port 3001.
+ *
+ * This server exposes only:
+ *   - GET /health   — infrastructure health check (DB + Redis)
+ *   - GET /metrics  — Prometheus metrics export
+ */
 export function startHealthCheckServer() {
   const server = http.createServer(async (req, res) => {
     const url = new URL(req.url || '/', 'http://localhost');
     const pathname = url.pathname;
 
-    // --- Existing health/metrics endpoints, unchanged ---
+    // ── Health check ──────────────────────────────────────────────────────
     if (pathname === '/health') {
       let isDbConnected = false;
       let isRedisConnected = false;
@@ -61,79 +53,33 @@ export function startHealthCheckServer() {
       return;
     }
 
+    // ── Prometheus metrics ────────────────────────────────────────────────
     if (pathname === '/metrics') {
       res.writeHead(200, { 'Content-Type': register.contentType });
       res.end(await register.metrics());
       return;
     }
 
-    // --- Dashboard API ---
-    if (pathname === '/api/jobs' && req.method === 'GET') {
-      try {
-        const jobs = await listJobs();
-        sendJson(res, 200, jobs);
-      } catch (err: any) {
-        sendJson(res, 500, { error: err.message });
-      }
-      return;
-    }
-
-    const approveMatch = pathname.match(/^\/api\/jobs\/([^/]+)\/approve$/);
-    if (approveMatch && req.method === 'POST') {
-      const jobId = approveMatch[1];
-      try {
-        const job = await prisma.job.findUnique({ where: { id: jobId } });
-        if (!job) {
-          sendJson(res, 404, { error: 'Job not found' });
-          return;
-        }
-        if (job.status !== 'READY') {
-          sendJson(res, 400, { error: `Job is in status "${job.status}", not READY.` });
-          return;
-        }
-        await applyQueue.add(`apply-submission-${jobId}`, { jobId });
-        sendJson(res, 200, { success: true });
-      } catch (err: any) {
-        sendJson(res, 500, { error: err.message });
-      }
-      return;
-    }
-
-    const resumeMatch = pathname.match(/^\/api\/jobs\/([^/]+)\/resume$/);
-    if (resumeMatch && req.method === 'GET') {
-    const app = await prisma.application.findFirst({ where: { jobId: resumeMatch[1] as string } });
-      servePdf(res, app?.resumePath ?? null);
-      return;
-    }
-
-    const coverMatch = pathname.match(/^\/api\/jobs\/([^/]+)\/cover-letter$/);
-    if (coverMatch && req.method === 'GET') {
-    const app = await prisma.application.findFirst({ where: { jobId: coverMatch[1] as string } });
-      servePdf(res, app?.coverLetterPath ?? null);
-      return;
-    }
-
-    // --- Static dashboard page ---
-    // --- Static dashboard page (Deprecated: Redirects to Next.js Frontend) ---
+    // ── Root / Dashboard redirect ─────────────────────────────────────────
     if (pathname === '/' || pathname === '/dashboard') {
       res.writeHead(200, { 'Content-Type': 'text/html' });
       res.end(`
         <!DOCTYPE html>
         <html>
         <head>
-          <title>Dashboard Migrated</title>
+          <title>AI Job Agent — Healthcheck</title>
           <style>
-            body { background: #0a0e1a; color: #e2e8f0; font-family: system-ui, sans-serif; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; }
-            .card { background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); padding: 30px; border-radius: 12px; text-align: center; }
-            a { color: #63b3ed; text-decoration: none; font-weight: bold; }
+            body { background: #f8fafc; color: #334155; font-family: system-ui, sans-serif; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; }
+            .card { background: #fff; border: 1px solid #e2e8f0; padding: 30px; border-radius: 12px; text-align: center; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+            a { color: #3b82f6; text-decoration: none; font-weight: bold; }
             a:hover { text-decoration: underline; }
           </style>
         </head>
         <body>
           <div class="card">
-            <h2>Dashboard has Migrated! 🚀</h2>
-            <p>The single-user HTML dashboard has been retired.</p>
-            <p>Access the new multi-tenant dashboard at <a href="http://localhost:3002/">http://localhost:3002</a></p>
+            <h2>AI Job Agent — Healthcheck Server 🏥</h2>
+            <p>This port serves health checks and metrics only.</p>
+            <p>Access the dashboard at <a href="http://localhost:3002/">http://localhost:3002</a></p>
           </div>
         </body>
         </html>
@@ -148,7 +94,8 @@ export function startHealthCheckServer() {
   const port = env.PORT || 3000;
   server.listen(port, () => {
     console.log(`🏥 [Healthcheck] Server successfully booted on port ${port}`);
-    console.log(`📊 [Dashboard] Available at http://localhost:${port}/`);
+    console.log(`   GET /health  — infrastructure health check`);
+    console.log(`   GET /metrics — Prometheus metrics export`);
   });
 
   return server;

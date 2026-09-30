@@ -1,7 +1,7 @@
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { redirect } from 'next/navigation';
-import { getApplications, getUsage, getResumes, getSearchProfile } from '@/lib/api';
+import { getApplications, getUsage, getResumes, getSearchProfile, getOnboardingStatus } from '@/lib/api';
 import DashboardClient from './DashboardClient';
 
 export const metadata = {
@@ -16,12 +16,17 @@ export default async function DashboardPage() {
   const userId = (session.user as any).id as string;
   const plan = (session.user as any).plan as string;
 
-  const [applications, usage, resumes, searchProfile] = await Promise.all([
+  const [applications, usage, resumes, searchProfile, onboardingStatus] = await Promise.all([
     getApplications(userId),
     getUsage(userId),
     getResumes(userId),
     getSearchProfile(userId),
+    getOnboardingStatus(userId),
   ]);
+
+  if (!onboardingStatus.onboardingCompleted) {
+    redirect('/onboarding');
+  }
 
   const hasResume = resumes.some(r => r.isActive);
   const hasSearchProfile = searchProfile.titles.length > 0;

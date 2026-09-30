@@ -13,7 +13,7 @@ const resumeRepo = new ResumeRepository();
 const applicationRepo = new ApplicationRepository();
 const usageLimiter = new UsageLimiter();
 
-const DEFAULT_BOARDS = ['greenhouse', 'lever'];
+const DEFAULT_BOARDS = ['greenhouse', 'lever', 'remoteok', 'indeed'];
 const DEFAULT_LOCATIONS = ['Remote'];
 
 /**

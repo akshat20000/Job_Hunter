@@ -6,3 +6,4 @@ venv
 resumes
 storage
 .env
+hf_cache

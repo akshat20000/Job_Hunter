@@ -1,9 +1,11 @@
 import { Router, Request, Response } from 'express';
 import { requireUserId, AuthenticatedRequest } from '../middleware/auth.js';
 import { SearchProfileRepository } from '../../repositories/searchProfileRepository.js';
+import { UserRepository } from '../../repositories/userRepository.js';
 
 const router = Router();
 const searchProfileRepo = new SearchProfileRepository();
+const userRepo = new UserRepository();
 
 /**
  * GET /api/me/search-profile
@@ -42,8 +44,15 @@ router.put('/', requireUserId, async (req: Request, res: Response) => {
     minSalary?: number | null;
   };
 
-  // Validate boards — only the three supported boards are allowed
-  const allowedBoards = ['linkedin', 'greenhouse', 'lever'];
+  const allowedBoards = [
+    'linkedin',
+    'greenhouse',
+    'lever',
+    'remoteok',
+    'indeed',
+    'glassdoor',
+    'usajobs',
+  ];
   if (boards && boards.some((b) => !allowedBoards.includes(b))) {
     res.status(400).json({
       error: `Invalid board(s). Allowed values: ${allowedBoards.join(', ')}`,
@@ -58,6 +67,10 @@ router.put('/', requireUserId, async (req: Request, res: Response) => {
       boards,
       remoteOnly,
       minSalary,
+    });
+    // Mark user onboarding completed whenever profile preferences are saved
+    await userRepo.setOnboardingCompleted(userId, true).catch((e) => {
+      console.warn('[SearchProfile] Failed to set onboardingCompleted:', e.message);
     });
     res.json(profile);
   } catch (err: any) {

@@ -28,10 +28,14 @@ class CoverLetterGenerator:
             f"Candidate Resume:\n{resume_content}"
         )
 
+        model = settings.GROQ_MODEL
+        if "llama" in model.lower():
+            model = "qwen/qwen3.8-27b"
+
         for attempt in range(max_retries):
             try:
                 response = self.client.chat.completions.create(
-                    model=settings.GROQ_MODEL,
+                    model=model,
                     messages=[
                         {"role": "system", "content": system_prompt},
                         {"role": "user", "content": user_content}

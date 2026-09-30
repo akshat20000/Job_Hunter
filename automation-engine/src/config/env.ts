@@ -9,10 +9,12 @@ const envPaths = [
   path.resolve(process.cwd(), '../.env'),
 ];
 
-for (const envPath of envPaths) {
+for (const envPath of [
+  path.resolve(process.cwd(), '../.env'),
+  path.resolve(process.cwd(), '.env'),
+]) {
   if (fs.existsSync(envPath)) {
-    dotenv.config({ path: envPath });
-    break;
+    dotenv.config({ path: envPath, override: true });
   }
 }
 
@@ -44,6 +46,7 @@ const envSchema = z.object({
     .or(z.boolean())
     .default(true),
   STORAGE_DIR: z.string().default(path.join(process.cwd(), 'storage')),
+  USAJOBS_API_KEY: z.string().default(''),
   ADZUNA_APP_ID: z.string().default(''),
   ADZUNA_APP_KEY: z.string().default(''),
   ADZUNA_COUNTRY: z.string().default('us'),
@@ -58,6 +61,12 @@ const envSchema = z.object({
 
   // ── Plan limits ──────────────────────────────────────────────────────────
   PREMIUM_DAILY_LIMIT: z.coerce.number().default(50),
+
+  // ── Candidate info ──────────────────────────────────────────────────────
+  CANDIDATE_FIRST_NAME: z.string().optional(),
+  CANDIDATE_LAST_NAME: z.string().optional(),
+  CANDIDATE_EMAIL: z.string().optional(),
+  CANDIDATE_PHONE: z.string().optional(),
 
   // ── Default user for single-pipeline Phase 1 scraping ───────────────────
   // Workers write Application rows keyed by userId; this env var provides

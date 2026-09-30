@@ -5,14 +5,26 @@ import { aiQueue } from '../queue/jobQueues.js';
 import { CompanyRepository } from '../repositories/companyRepository.js';
 import { env } from '../config/index.js';
 
-// Board-specific scraper modules (to be implemented in Group 8)
+// Board-specific scraper modules
 import { scrapeLinkedIn } from '../boards/linkedin/search.js';
 import { scrapeGreenhouse } from '../boards/greenhouse/search.js';
 import { scrapeLever } from '../boards/lever/search.js';
-import { scrapeAdzuna } from '../boards/adzuna/search.js';
+import { scrapeRemoteOK } from '../boards/remoteok/search.js';
+import { scrapeIndeed } from '../boards/indeed/search.js';
+import { scrapeGlassdoor } from '../boards/glassdoor/search.js';
+import { scrapeUSAJobs } from '../boards/usajobs/search.js';
+
+export type BoardName =
+  | 'linkedin'
+  | 'greenhouse'
+  | 'lever'
+  | 'remoteok'
+  | 'indeed'
+  | 'glassdoor'
+  | 'usajobs';
 
 export interface ScrapeJobData {
-  boards: ('linkedin' | 'greenhouse' | 'lever' | 'adzuna')[];
+  boards: BoardName[];
   searchQueries?: string[];
   locations?: string[];
   limit?: number;
@@ -61,21 +73,40 @@ export class ScrapeWorker extends BaseWorker<ScrapeJobData, void> {
 
       for (const searchQuery of searchQueries) {
         if (boardResultCount >= limit) break;
-        const locationsToTry = board === 'adzuna' ? locations : [locations[0]];
+        // Some boards support location filtering, others don't
+        const locationsToTry = ['indeed', 'usajobs', 'glassdoor'].includes(board)
+          ? locations
+          : [locations[0]];
 
         for (const location of locationsToTry) {
           if (boardResultCount >= limit) break;
           const remaining = limit - boardResultCount;
           try {
             let scrapedJobs: any[] = [];
-            if (board === 'linkedin') {
-              scrapedJobs = await scrapeLinkedIn(searchQuery, location, remaining);
-            } else if (board === 'greenhouse') {
-              scrapedJobs = await scrapeGreenhouse(searchQuery, remaining);
-            } else if (board === 'lever') {
-              scrapedJobs = await scrapeLever(searchQuery, remaining);
-            } else if (board === 'adzuna') {
-              scrapedJobs = await scrapeAdzuna(searchQuery, location, remaining);
+            switch (board) {
+              case 'linkedin':
+                scrapedJobs = await scrapeLinkedIn(searchQuery, location, remaining);
+                break;
+              case 'greenhouse':
+                scrapedJobs = await scrapeGreenhouse(searchQuery, remaining);
+                break;
+              case 'lever':
+                scrapedJobs = await scrapeLever(searchQuery, remaining);
+                break;
+              case 'remoteok':
+                scrapedJobs = await scrapeRemoteOK(searchQuery, location, remaining);
+                break;
+              case 'indeed':
+                scrapedJobs = await scrapeIndeed(searchQuery, location, remaining);
+                break;
+              case 'glassdoor':
+                scrapedJobs = await scrapeGlassdoor(searchQuery, location, remaining);
+                break;
+              case 'usajobs':
+                scrapedJobs = await scrapeUSAJobs(searchQuery, location, remaining);
+                break;
+              default:
+                console.warn(`⚠️ [ScrapeWorker] Unknown board "${board}", skipping.`);
             }
             boardResultCount += scrapedJobs.length;
 

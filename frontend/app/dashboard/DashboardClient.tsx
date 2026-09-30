@@ -11,8 +11,6 @@ const POLL_INTERVAL_MS = 5000;
 
 type Filter = 'all' | 'matched' | 'ready' | 'applied' | 'failed';
 
-const STATUS_ORDER = ['FOUND', 'MATCHED', 'TAILORED', 'READY', 'APPLYING', 'APPLIED', 'RETRYING', 'FAILED'];
-
 function statusBadge(status: string) {
   return <span className={`badge badge-${status.toLowerCase()}`}>{status}</span>;
 }
@@ -68,13 +66,14 @@ export default function DashboardClient({ applications: initialApplications, usa
 
   const canSearch = hasResume && hasSearchProfile;
 
+  // ALL API calls now go through the Next.js server-side proxy at /api/proxy/...
+  // This injects the authenticated X-User-Id header server-side — never from the browser.
   const refresh = useCallback(async () => {
     if (!userId) return;
-    const base = process.env.NEXT_PUBLIC_AUTOMATION_API ?? 'http://localhost:3001';
     try {
       const [appsRes, usageRes] = await Promise.all([
-        fetch(`${base}/api/me/applications`, { headers: { 'X-User-Id': userId } }),
-        fetch(`${base}/api/me/usage`, { headers: { 'X-User-Id': userId } }),
+        fetch('/api/proxy/me/applications'),
+        fetch('/api/proxy/me/usage'),
       ]);
       if (appsRes.ok) setApplications(await appsRes.json());
       if (usageRes.ok) setUsage(await usageRes.json());
@@ -119,10 +118,7 @@ export default function DashboardClient({ applications: initialApplications, usa
     setSearching(true);
     setMessage(null);
     try {
-      const res = await fetch(
-        `${process.env.NEXT_PUBLIC_AUTOMATION_API ?? 'http://localhost:3001'}/api/me/search/start`,
-        { method: 'POST', headers: { 'X-User-Id': userId } }
-      );
+      const res = await fetch('/api/proxy/me/search/start', { method: 'POST' });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
       setMessage({ text: `✓ ${data.message}`, type: 'ok' });
@@ -143,10 +139,7 @@ export default function DashboardClient({ applications: initialApplications, usa
     setApproving(app.job.id);
     setMessage(null);
     try {
-      const res = await fetch(
-        `${process.env.NEXT_PUBLIC_AUTOMATION_API ?? 'http://localhost:3001'}/api/me/applications/approve/${app.job.id}`,
-        { method: 'POST', headers: { 'X-User-Id': userId } }
-      );
+      const res = await fetch(`/api/proxy/me/applications/approve/${app.job.id}`, { method: 'POST' });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
       if (data.queued) {
@@ -168,10 +161,7 @@ export default function DashboardClient({ applications: initialApplications, usa
   async function handleViewArtifact(jobId: string, type: 'resume' | 'cover-letter') {
     if (!userId) return;
     try {
-      const res = await fetch(
-        `${process.env.NEXT_PUBLIC_AUTOMATION_API ?? 'http://localhost:3001'}/api/me/applications/${jobId}/artifacts/${type}`,
-        { headers: { 'X-User-Id': userId } }
-      );
+      const res = await fetch(`/api/proxy/me/applications/${jobId}/artifacts/${type}`);
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
         throw new Error(data.error ?? 'Failed to load artifact.');
@@ -194,7 +184,6 @@ export default function DashboardClient({ applications: initialApplications, usa
           </Link>
           <div className="nav-links">
             <Link href="/dashboard" className="nav-link active">Dashboard</Link>
-            <Link href="/onboarding" className="nav-link">Onboarding</Link>
             <Link href="/settings" className="nav-link">Settings</Link>
           </div>
           <div className="nav-actions">
@@ -225,9 +214,9 @@ export default function DashboardClient({ applications: initialApplications, usa
             {!canSearch && (
               <p className="text-sm text-muted" style={{ marginTop: 6 }}>
                 {!hasResume && !hasSearchProfile
-                  ? <>Upload a resume and set your search profile in <Link href="/onboarding">Onboarding</Link> to enable this.</>
+                  ? <>Upload a resume and set your search profile in <Link href="/settings">Settings</Link> to enable this.</>
                   : !hasResume
-                  ? <>Upload a resume in <Link href="/onboarding">Onboarding</Link> to enable this.</>
+                  ? <>Upload a resume in <Link href="/settings">Settings</Link> to enable this.</>
                   : <>Add at least one job title in <Link href="/settings">Settings</Link> to enable this.</>}
               </p>
             )}
@@ -257,7 +246,7 @@ export default function DashboardClient({ applications: initialApplications, usa
         {/* LinkedIn notice */}
         {counts.linkedin > 0 && (
           <div style={{
-            background: 'rgba(246,224,94,0.08)', border: '1px solid rgba(246,224,94,0.25)',
+            background: 'var(--yellow-light)', border: '1px solid rgba(202,138,4,0.25)',
             borderRadius: 'var(--radius)', padding: '14px 20px', marginBottom: 24,
             display: 'flex', alignItems: 'center', gap: 12,
           }}>
@@ -265,7 +254,7 @@ export default function DashboardClient({ applications: initialApplications, usa
             <div>
               <strong style={{ color: 'var(--yellow)' }}>{counts.linkedin} LinkedIn job{counts.linkedin !== 1 ? 's' : ''} require manual submission.</strong>
               <span className="text-muted" style={{ marginLeft: 8, fontSize: 13 }}>
-                Auto-submit is disabled for LinkedIn. Use the &ldquo;Review & Submit&rdquo; button below.
+                Auto-submit is disabled for LinkedIn. Use the &ldquo;Review &amp; Submit&rdquo; button below.
               </span>
             </div>
           </div>
@@ -273,8 +262,8 @@ export default function DashboardClient({ applications: initialApplications, usa
 
         {message && (
           <div style={{
-            background: message.type === 'ok' ? 'var(--green-glow)' : 'var(--red-glow)',
-            border: `1px solid ${message.type === 'ok' ? 'rgba(104,211,145,0.3)' : 'rgba(252,129,129,0.3)'}`,
+            background: message.type === 'ok' ? 'var(--green-light)' : 'var(--red-light)',
+            border: `1px solid ${message.type === 'ok' ? 'rgba(22,163,74,0.3)' : 'rgba(220,38,38,0.3)'}`,
             borderRadius: 'var(--radius-sm)', padding: '12px 16px', marginBottom: 20,
             fontSize: 14, color: message.type === 'ok' ? 'var(--green)' : 'var(--red)',
           }}>

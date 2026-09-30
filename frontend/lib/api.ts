@@ -52,6 +52,12 @@ export interface Resume {
   parsedTextPreview?: string;
 }
 
+export interface OnboardingStatus {
+  onboardingCompleted: boolean;
+  hasResume: boolean;
+  hasSearchProfile: boolean;
+}
+
 function headers(userId: string) {
   return {
     'Content-Type': 'application/json',
@@ -160,3 +166,27 @@ export async function signup(data: { email: string; name?: string; password: str
   }
   return res.json();
 }
+
+export async function getOnboardingStatus(userId: string): Promise<OnboardingStatus> {
+  const res = await fetch(`${API_BASE}/api/me/onboarding/status`, {
+    headers: headers(userId),
+    cache: 'no-store',
+  });
+  if (!res.ok) {
+    return { onboardingCompleted: false, hasResume: false, hasSearchProfile: false };
+  }
+  return res.json();
+}
+
+export async function completeOnboarding(userId: string): Promise<{ success: boolean; onboardingCompleted: boolean }> {
+  const res = await fetch(`${API_BASE}/api/me/onboarding/complete`, {
+    method: 'POST',
+    headers: headers(userId),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error ?? 'Failed to complete onboarding');
+  }
+  return res.json();
+}
+

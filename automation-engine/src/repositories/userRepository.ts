@@ -2,11 +2,17 @@ import { BaseRepository } from './baseRepository.js';
 
 export class UserRepository extends BaseRepository {
   async findById(id: string) {
-    return this.prisma.user.findUnique({ where: { id } });
+    return this.prisma.user.findUnique({
+      where: { id },
+      include: { searchProfile: true, resumes: true },
+    });
   }
 
   async findByEmail(email: string) {
-    return this.prisma.user.findUnique({ where: { email } });
+    return this.prisma.user.findUnique({
+      where: { email },
+      include: { searchProfile: true, resumes: true },
+    });
   }
 
   async create(data: {
@@ -21,7 +27,15 @@ export class UserRepository extends BaseRepository {
         name: data.name,
         passwordHash: data.passwordHash,
         plan: data.plan ?? 'FREE',
+        onboardingCompleted: false,
       },
+    });
+  }
+
+  async setOnboardingCompleted(id: string, completed: boolean = true) {
+    return this.prisma.user.update({
+      where: { id },
+      data: { onboardingCompleted: completed },
     });
   }
 
@@ -29,3 +43,4 @@ export class UserRepository extends BaseRepository {
     return this.prisma.user.update({ where: { id }, data: { plan } });
   }
 }
+

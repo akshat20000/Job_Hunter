@@ -1,17 +1,29 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 
 export const dynamic = 'force-dynamic';
 
-const AUTOMATION_API = process.env.NEXT_PUBLIC_AUTOMATION_API ?? 'http://localhost:3001';
-const BOARDS = ['linkedin', 'greenhouse', 'lever'] as const;
+const BOARDS = ['greenhouse', 'lever', 'remoteok', 'indeed', 'glassdoor', 'usajobs', 'linkedin'] as const;
+
+const BOARD_LABELS: Record<string, string> = {
+  greenhouse: 'Greenhouse (Company Career Pages)',
+  lever: 'Lever (Company Career Pages)',
+  remoteok: 'RemoteOK (Remote Jobs)',
+  indeed: 'Indeed',
+  glassdoor: 'Glassdoor',
+  usajobs: 'USAJobs (Government)',
+  linkedin: 'LinkedIn',
+};
 
 export default function OnboardingPage() {
-  const { data: session } = useSession();
+  const { data: session, status } = useSession();
   const router = useRouter();
+
+  // If already onboarded, redirect to dashboard
+  const [checkingStatus, setCheckingStatus] = useState(true);
 
   // Step state
   const [step, setStep] = useState<1 | 2>(1);
@@ -26,13 +38,36 @@ export default function OnboardingPage() {
   // Search profile
   const [titles, setTitles] = useState('');
   const [locations, setLocations] = useState('');
-  const [boards, setBoards] = useState<string[]>(['linkedin', 'greenhouse', 'lever']);
+  const [boards, setBoards] = useState<string[]>(['greenhouse', 'lever', 'remoteok', 'indeed']);
   const [remoteOnly, setRemoteOnly] = useState(false);
   const [minSalary, setMinSalary] = useState('');
   const [profileSaving, setProfileSaving] = useState(false);
   const [profileError, setProfileError] = useState('');
 
   const userId = (session?.user as any)?.id;
+
+  useEffect(() => {
+    if (status === 'unauthenticated') {
+      router.replace('/login');
+      return;
+    }
+
+    if (status === 'authenticated') {
+      // Check if already onboarded
+      fetch('/api/proxy/me/onboarding/status')
+        .then((res) => (res.ok ? res.json() : null))
+        .then((data) => {
+          if (data?.onboardingCompleted) {
+            router.replace('/dashboard');
+          } else {
+            setCheckingStatus(false);
+          }
+        })
+        .catch(() => {
+          setCheckingStatus(false);
+        });
+    }
+  }, [status, router]);
 
   async function handleResumeUpload() {
     if (!file || !userId) return;
@@ -41,9 +76,9 @@ export default function OnboardingPage() {
     try {
       const formData = new FormData();
       formData.append('file', file);
-      const res = await fetch(`${AUTOMATION_API}/api/me/resumes`, {
+      // Use the secure server-side proxy — no X-User-Id from browser
+      const res = await fetch('/api/proxy/me/resumes', {
         method: 'POST',
-        headers: { 'X-User-Id': userId },
         body: formData,
       });
       if (!res.ok) {
@@ -64,9 +99,10 @@ export default function OnboardingPage() {
     setProfileSaving(true);
     setProfileError('');
     try {
-      const res = await fetch(`${AUTOMATION_API}/api/me/search-profile`, {
+      // Use the secure server-side proxy — no X-User-Id from browser
+      const res = await fetch('/api/proxy/me/search-profile', {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json', 'X-User-Id': userId },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           titles: titles.split(',').map(s => s.trim()).filter(Boolean),
           locations: locations.split(',').map(s => s.trim()).filter(Boolean),
@@ -79,6 +115,12 @@ export default function OnboardingPage() {
         const err = await res.json();
         throw new Error(err.error || 'Failed to save profile');
       }
+
+      // Mark onboarding completed explicitly
+      await fetch('/api/proxy/me/onboarding/complete', {
+        method: 'POST',
+      }).catch(() => {});
+
       router.push('/dashboard');
     } catch (err: any) {
       setProfileError(err.message);
@@ -93,6 +135,14 @@ export default function OnboardingPage() {
     );
   }
 
+  if (checkingStatus) {
+    return (
+      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg)' }}>
+        <p className="text-muted" style={{ fontSize: 15 }}>Setting up your profile…</p>
+      </div>
+    );
+  }
+
   return (
     <div style={{ minHeight: '100vh', background: 'var(--bg)', padding: '40px 24px' }}>
       <div style={{ maxWidth: 600, margin: '0 auto' }}>
@@ -104,8 +154,8 @@ export default function OnboardingPage() {
                 width: 32, height: 32, borderRadius: '50%', display: 'flex',
                 alignItems: 'center', justifyContent: 'center', fontSize: 13,
                 fontWeight: 700,
-                background: step >= n ? 'var(--accent)' : 'var(--bg-card)',
-                color: step >= n ? '#0a0e1a' : 'var(--text-muted)',
+                background: step >= n ? 'var(--accent)' : '#ffffff',
+                color: step >= n ? '#ffffff' : 'var(--text-muted)',
                 border: `1px solid ${step >= n ? 'var(--accent)' : 'var(--border)'}`,
                 transition: 'all 0.3s',
               }}>{n}</div>
@@ -210,7 +260,7 @@ export default function OnboardingPage() {
             </div>
 
             <div className="form-group">
-              <label className="form-label">Job Boards</label>
+              <label className="form-label">Job Sources</label>
               <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                 {BOARDS.map(board => (
                   <button
@@ -222,13 +272,13 @@ export default function OnboardingPage() {
                       padding: '8px 16px',
                       borderRadius: 'var(--radius-sm)',
                       border: `1px solid ${boards.includes(board) ? 'var(--accent)' : 'var(--border)'}`,
-                      background: boards.includes(board) ? 'var(--accent-glow)' : 'transparent',
+                      background: boards.includes(board) ? 'var(--accent-light)' : '#ffffff',
                       color: boards.includes(board) ? 'var(--accent)' : 'var(--text-muted)',
-                      cursor: 'pointer', fontSize: 14, fontWeight: 500,
-                      textTransform: 'capitalize', transition: 'all 0.15s',
+                      cursor: 'pointer', fontSize: 13, fontWeight: 500,
+                      transition: 'all 0.15s',
                     }}
                   >
-                    {board}
+                    {BOARD_LABELS[board] || board}
                   </button>
                 ))}
               </div>

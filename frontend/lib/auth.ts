@@ -33,6 +33,7 @@ export const authOptions: NextAuthOptions = {
             email: user.email,
             name: user.name,
             plan: user.plan,
+            onboardingCompleted: Boolean(user.onboardingCompleted),
           };
         } catch {
           return null;
@@ -46,10 +47,14 @@ export const authOptions: NextAuthOptions = {
   },
 
   callbacks: {
-    async jwt({ token, user }) {
+    async jwt({ token, user, trigger, session }) {
       if (user) {
         token.id = user.id;
         token.plan = (user as any).plan ?? 'FREE';
+        token.onboardingCompleted = (user as any).onboardingCompleted ?? false;
+      }
+      if (trigger === 'update' && session?.onboardingCompleted !== undefined) {
+        token.onboardingCompleted = session.onboardingCompleted;
       }
       return token;
     },
@@ -57,6 +62,7 @@ export const authOptions: NextAuthOptions = {
       if (session.user) {
         (session.user as any).id = token.id as string;
         (session.user as any).plan = token.plan as string;
+        (session.user as any).onboardingCompleted = token.onboardingCompleted ?? false;
       }
       return session;
     },

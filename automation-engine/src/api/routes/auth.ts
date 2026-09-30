@@ -44,6 +44,7 @@ router.post('/signup', async (req: Request, res: Response) => {
       email: user.email,
       name: user.name,
       plan: user.plan,
+      onboardingCompleted: false,
       createdAt: user.createdAt,
     });
   } catch (err: any) {
@@ -77,11 +78,16 @@ router.post('/login', async (req: Request, res: Response) => {
       return;
     }
 
+    const isOnboarded = Boolean(
+      user.onboardingCompleted || (user.searchProfile && user.searchProfile.titles.length > 0)
+    );
+
     res.json({
       id: user.id,
       email: user.email,
       name: user.name,
       plan: user.plan,
+      onboardingCompleted: isOnboarded,
     });
   } catch (err: any) {
     console.error('[AuthRoute] Login failed:', err);

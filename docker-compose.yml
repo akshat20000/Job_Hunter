@@ -69,7 +69,7 @@ services:
     container_name: brain-engine
     environment:
       - GROQ_API_KEY=${GROQ_API_KEY}
-      - GROQ_MODEL=${GROQ_MODEL:-llama-3.3-70b-versatile}
+      - GROQ_MODEL=${GROQ_MODEL:-qwen/qwen3.8-27b}
       - EMBEDDING_MODEL_NAME=all-MiniLM-L6-v2
     ports:
       - "8000:8000"
@@ -90,9 +90,6 @@ services:
       - REDIS_URL=redis://redis:6379
       - BRAIN_ENGINE_URL=http://brain-engine:8000
       - GROQ_API_KEY=${GROQ_API_KEY}
-      - ADZUNA_APP_ID=${ADZUNA_APP_ID}
-      - ADZUNA_APP_KEY=${ADZUNA_APP_KEY}
-      - ADZUNA_COUNTRY=${ADZUNA_COUNTRY:-us}
       - SMTP_HOST=${SMTP_HOST}
       - SMTP_PORT=${SMTP_PORT}
       - SMTP_USER=${SMTP_USER}

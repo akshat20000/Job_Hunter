@@ -17,6 +17,7 @@ model User {
   plan          String          @default("FREE") // FREE | PREMIUM
   emailVerified DateTime?
   image         String?
+  onboardingCompleted Boolean       @default(false)
   createdAt     DateTime        @default(now())
   updatedAt     DateTime        @updatedAt
   accounts      Account[]
