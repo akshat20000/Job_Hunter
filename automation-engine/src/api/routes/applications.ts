@@ -3,11 +3,14 @@ import path from 'path';
 import fs from 'fs';
 import { requireUserId, AuthenticatedRequest } from '../middleware/auth.js';
 import { ApplicationRepository } from '../../repositories/applicationRepository.js';
+import { ResumeRepository } from '../../repositories/resumeRepository.js';
+import { brainEngineClient } from '../../clients/brainEngineClient.js';
 import { applyQueue } from '../../queue/jobQueues.js';
 import { prisma, env } from '../../config/index.js';
 
 const router = Router();
 const appRepo = new ApplicationRepository();
+const resumeRepo = new ResumeRepository();
 
 /**
  * GET /api/me/applications
@@ -71,7 +74,7 @@ router.get('/:id', requireUserId, async (req: Request, res: Response) => {
  */
 router.get('/:jobId/artifacts/:type', requireUserId, async (req: Request, res: Response) => {
   const { userId } = req as AuthenticatedRequest;
-  const jobId = req.params['jobId'] as string;
+  const idOrJobId = req.params['jobId'] as string;
   const type = req.params['type'] as string;
 
   if (type !== 'resume' && type !== 'cover-letter') {
@@ -80,26 +83,65 @@ router.get('/:jobId/artifacts/:type', requireUserId, async (req: Request, res: R
   }
 
   try {
-    const app = await appRepo.findByUserAndJobId(userId, jobId);
+    // 1. Find application by (userId, jobId) or directly by application id
+    let app = await appRepo.findByUserAndJobId(userId, idOrJobId);
+    if (!app) {
+      const byAppId = await appRepo.findById(idOrJobId);
+      if (byAppId && byAppId.userId === userId) {
+        app = byAppId;
+      }
+    }
+
     if (!app) {
       res.status(404).json({ error: 'Application not found.' });
       return;
     }
 
-    const filePath = type === 'resume' ? app.resumePath : app.coverLetterPath;
-    if (!filePath) {
-      res.status(404).json({ error: 'This artifact has not been generated yet.' });
-      return;
+    let filePath = type === 'resume' ? app.resumePath : app.coverLetterPath;
+
+    // 2. If artifact is not yet generated or missing on disk, regenerate on-demand!
+    const needsRegeneration = !filePath || !fs.existsSync(path.resolve(filePath));
+
+    if (needsRegeneration) {
+      console.log(
+        `📄 [Artifacts] File missing on disk for job "${app.job.title}" (${app.job.id}). Regenerating on-demand via brain-engine...`
+      );
+
+      try {
+        const activeResume = await resumeRepo.findActiveByUser(userId);
+        const resumeText = (activeResume?.content || activeResume?.parsedText || '').trim();
+        if (!resumeText) {
+          res.status(400).json({ error: 'No active uploaded resume found. Please upload a resume first.' });
+          return;
+        }
+
+        const targetStoragePath = path.join(env.STORAGE_DIR, 'applications', app.job.id);
+        fs.mkdirSync(targetStoragePath, { recursive: true });
+
+        const result = await brainEngineClient.generateArtifacts({
+          job_title: app.job.title,
+          company_name: app.job.company.name,
+          job_description: app.job.description,
+          resume_content: resumeText,
+          output_dir: targetStoragePath,
+        });
+
+        // Persist newly generated paths in DB
+        await appRepo.updateStatus(userId, app.job.id, app.status as any, {
+          resumePath: result.resume_pdf_path,
+          coverLetterPath: result.cover_letter_pdf_path,
+        });
+
+        filePath = type === 'resume' ? result.resume_pdf_path : result.cover_letter_pdf_path;
+      } catch (genErr: any) {
+        console.error('[Artifacts] On-demand regeneration failed:', genErr.message);
+        res.status(500).json({ error: `Could not generate artifact: ${genErr.message}` });
+        return;
+      }
     }
 
-    // Defense in depth: only ever serve files that live under STORAGE_DIR.
-    const resolved = path.resolve(filePath);
-    const storageRoot = path.resolve(env.STORAGE_DIR);
-    if (!resolved.startsWith(storageRoot + path.sep)) {
-      res.status(400).json({ error: 'Invalid artifact path.' });
-      return;
-    }
-
+    // 3. Serve the PDF
+    const resolved = path.resolve(filePath!);
     if (!fs.existsSync(resolved)) {
       res.status(404).json({ error: 'Artifact file is missing on disk.' });
       return;
@@ -110,6 +152,7 @@ router.get('/:jobId/artifacts/:type', requireUserId, async (req: Request, res: R
     res.setHeader('Content-Type', 'application/pdf');
     fs.createReadStream(resolved).pipe(res);
   } catch (err: any) {
+    console.error('[Artifacts] Error serving artifact:', err);
     res.status(500).json({ error: err.message });
   }
 });

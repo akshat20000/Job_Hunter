@@ -160,6 +160,7 @@ export default function DashboardClient({ applications: initialApplications, usa
 
   async function handleViewArtifact(jobId: string, type: 'resume' | 'cover-letter') {
     if (!userId) return;
+    setMessage({ text: `Preparing ${type === 'resume' ? 'tailored resume' : 'cover letter'} preview…`, type: 'ok' });
     try {
       const res = await fetch(`/api/proxy/me/applications/${jobId}/artifacts/${type}`);
       if (!res.ok) {
@@ -169,6 +170,7 @@ export default function DashboardClient({ applications: initialApplications, usa
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
       window.open(url, '_blank', 'noopener,noreferrer');
+      setMessage(null);
     } catch (err: any) {
       setMessage({ text: err.message, type: 'err' });
     }

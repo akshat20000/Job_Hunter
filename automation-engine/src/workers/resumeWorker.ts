@@ -32,8 +32,9 @@ export class ResumeWorker extends BaseWorker<ResumeJobData, void> {
 
     // 2. Load user's active resume text for tailoring
     const activeResume = await this.resumeRepo.findActiveByUser(userId);
-    if (!activeResume) {
-      console.warn(`⚠️ [ResumeWorker] No active resume for user ${userId}. Falling back to master resume.`);
+    const resumeText = (activeResume?.content || activeResume?.parsedText || '').trim();
+    if (!resumeText) {
+      throw new Error(`No active resume found for user ${userId}. Cannot tailor application documents.`);
     }
 
     const stateMachine = new ApplicationStateMachine(dbJob.status as any);
@@ -41,12 +42,12 @@ export class ResumeWorker extends BaseWorker<ResumeJobData, void> {
     // 3. Prepare the local target folder for PDF outputs
     const targetStoragePath = path.join(env.STORAGE_DIR, 'applications', jobId);
 
-    // 4. Command brain engine to compile tailored files — pass resume_content per-request
+    // 4. Command brain engine to compile tailored files using user's resume
     const result = await brainEngineClient.generateArtifacts({
       job_title: dbJob.title,
       company_name: dbJob.company.name,
       job_description: dbJob.description,
-      resume_content: activeResume?.content ?? '',
+      resume_content: resumeText,
       output_dir: targetStoragePath,
     });
 

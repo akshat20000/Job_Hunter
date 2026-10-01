@@ -31,19 +31,19 @@ export class AIWorker extends BaseWorker<AIJobData, void> {
 
     // 2. Load user's active resume text for per-request evaluation
     const activeResume = await this.resumeRepo.findActiveByUser(userId);
-    if (!activeResume) {
-      console.warn(`⚠️ [AIWorker] No active resume found for user ${userId}. Falling back to master resume.`);
+    const resumeText = (activeResume?.content || activeResume?.parsedText || '').trim();
+    if (!resumeText) {
+      throw new Error(`No active resume found for user ${userId}. Please upload your resume.`);
     }
 
     // 2. Validate current state transitions
     const stateMachine = new ApplicationStateMachine(dbJob.status as any);
 
-    // 3. Request evaluation from Python AI Engine, passing resume text per-request
+    // 3. Request evaluation from Python AI Engine, passing user's uploaded resume text
     const result = await brainEngineClient.evaluateFit({
       job_title: dbJob.title,
       job_description: dbJob.description,
-      // Pass user's resume text directly — brain-engine falls back to master.md if empty
-      resume_content: activeResume?.content ?? '',
+      resume_content: resumeText,
     });
 
     console.log(`📊 [AIWorker] Evaluation complete for job ${jobId}. Score: ${result.score}/100.`);

@@ -41,6 +41,7 @@ export interface SearchProfile {
   boards: string[];
   remoteOnly: boolean;
   minSalary: number | null;
+  experienceLevel?: string | null;
 }
 
 export interface Resume {

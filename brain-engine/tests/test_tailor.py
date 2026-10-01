@@ -22,7 +22,7 @@ def test_generate_artifacts_endpoint(mock_get_resume, mock_gen_cl, mock_tailor_r
                 "job_title": "React Engineer",
                 "company_name": "Vercel",
                 "job_description": "Build modern React frontends",
-                "resume_content": "",
+                "resume_content": "Candidate Resume",
                 "output_dir": tmp_dir
             }
         )

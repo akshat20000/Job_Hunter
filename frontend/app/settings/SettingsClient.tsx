@@ -5,7 +5,7 @@ import { signOut, useSession } from 'next-auth/react';
 import Link from 'next/link';
 import type { UsageStats, SearchProfile, Resume } from '@/lib/api';
 
-const BOARDS = ['greenhouse', 'lever', 'remoteok', 'indeed', 'glassdoor', 'usajobs', 'linkedin'] as const;
+const BOARDS = ['greenhouse', 'lever', 'remoteok', 'indeed', 'glassdoor', 'usajobs', 'linkedin', 'adzuna'] as const;
 
 const BOARD_LABELS: Record<string, string> = {
   greenhouse: 'Greenhouse (Career Pages)',
@@ -15,7 +15,15 @@ const BOARD_LABELS: Record<string, string> = {
   glassdoor: 'Glassdoor',
   usajobs: 'USAJobs (Government)',
   linkedin: 'LinkedIn',
+  adzuna: 'Adzuna (India & Global Aggregator)',
 };
+
+const EXPERIENCE_LEVELS = [
+  { id: 'entry', label: 'Entry Level (0-2 yrs)' },
+  { id: 'mid', label: 'Mid Level (2-5 yrs)' },
+  { id: 'senior', label: 'Senior Level (5-8 yrs)' },
+  { id: 'lead', label: 'Lead / Principal (8+ yrs)' },
+] as const;
 
 interface Props {
   usage: UsageStats;
@@ -47,6 +55,7 @@ export default function SettingsClient({
       : ['greenhouse', 'lever', 'remoteok', 'indeed']
   );
   const [remoteOnly, setRemoteOnly] = useState<boolean>(initialProfile.remoteOnly ?? false);
+  const [experienceLevel, setExperienceLevel] = useState<string>(initialProfile.experienceLevel || 'mid');
   const [minSalary, setMinSalary] = useState<string>(
     initialProfile.minSalary ? String(initialProfile.minSalary) : ''
   );
@@ -95,6 +104,7 @@ export default function SettingsClient({
           boards,
           remoteOnly,
           minSalary: parsedSalary,
+          experienceLevel,
         }),
       });
 
@@ -311,6 +321,37 @@ export default function SettingsClient({
                 onChange={e => setLocations(e.target.value)}
               />
               <p className="text-xs text-muted" style={{ marginTop: 4 }}>Separate multiple locations with commas.</p>
+            </div>
+
+            <div className="form-group mb-3">
+              <label className="form-label">Experience Level</label>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 8, marginTop: 4 }}>
+                {EXPERIENCE_LEVELS.map(lvl => {
+                  const isSelected = experienceLevel === lvl.id;
+                  return (
+                    <button
+                      key={lvl.id}
+                      id={`settings-exp-${lvl.id}`}
+                      type="button"
+                      onClick={() => setExperienceLevel(lvl.id)}
+                      style={{
+                        padding: '10px 14px',
+                        borderRadius: 'var(--radius-sm)',
+                        border: `1px solid ${isSelected ? 'var(--accent)' : 'var(--border)'}`,
+                        background: isSelected ? 'var(--accent-light)' : '#ffffff',
+                        color: isSelected ? 'var(--accent)' : 'var(--text-muted)',
+                        cursor: 'pointer',
+                        fontSize: 13,
+                        fontWeight: isSelected ? 600 : 500,
+                        textAlign: 'center',
+                        transition: 'all 0.15s',
+                      }}
+                    >
+                      {lvl.label}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
 
             <div className="form-group mb-3">

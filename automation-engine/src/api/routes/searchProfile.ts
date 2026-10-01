@@ -17,7 +17,14 @@ router.get('/', requireUserId, async (req: Request, res: Response) => {
     const profile = await searchProfileRepo.findByUser(userId);
     if (!profile) {
       // Return empty defaults if no profile set yet
-      res.json({ titles: [], locations: [], boards: [], remoteOnly: false, minSalary: null });
+      res.json({
+        titles: [],
+        locations: [],
+        boards: [],
+        remoteOnly: false,
+        minSalary: null,
+        experienceLevel: null,
+      });
       return;
     }
     res.json(profile);
@@ -30,18 +37,18 @@ router.get('/', requireUserId, async (req: Request, res: Response) => {
  * PUT /api/me/search-profile
  * Create or update the authenticated user's search preferences.
  *
- * Body: { titles?, locations?, boards?, remoteOnly?, minSalary? }
- * boards must be from: ['linkedin', 'greenhouse', 'lever']
+ * Body: { titles?, locations?, boards?, remoteOnly?, minSalary?, experienceLevel? }
  */
 router.put('/', requireUserId, async (req: Request, res: Response) => {
   const { userId } = req as AuthenticatedRequest;
 
-  const { titles, locations, boards, remoteOnly, minSalary } = req.body as {
+  const { titles, locations, boards, remoteOnly, minSalary, experienceLevel } = req.body as {
     titles?: string[];
     locations?: string[];
     boards?: string[];
     remoteOnly?: boolean;
     minSalary?: number | null;
+    experienceLevel?: string | null;
   };
 
   const allowedBoards = [
@@ -52,6 +59,7 @@ router.put('/', requireUserId, async (req: Request, res: Response) => {
     'indeed',
     'glassdoor',
     'usajobs',
+    'adzuna',
   ];
   if (boards && boards.some((b) => !allowedBoards.includes(b))) {
     res.status(400).json({
@@ -67,6 +75,7 @@ router.put('/', requireUserId, async (req: Request, res: Response) => {
       boards,
       remoteOnly,
       minSalary,
+      experienceLevel,
     });
     // Mark user onboarding completed whenever profile preferences are saved
     await userRepo.setOnboardingCompleted(userId, true).catch((e) => {

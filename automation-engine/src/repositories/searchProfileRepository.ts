@@ -7,6 +7,7 @@ export interface SearchProfileData {
   boards?: string[];
   remoteOnly?: boolean;
   minSalary?: number | null;
+  experienceLevel?: string | null;
 }
 
 export class SearchProfileRepository extends BaseRepository {
@@ -23,6 +24,7 @@ export class SearchProfileRepository extends BaseRepository {
         boards: data.boards,
         remoteOnly: data.remoteOnly,
         minSalary: data.minSalary,
+        experienceLevel: data.experienceLevel,
       },
       create: {
         userId,
@@ -31,6 +33,7 @@ export class SearchProfileRepository extends BaseRepository {
         boards: data.boards ?? [],
         remoteOnly: data.remoteOnly ?? false,
         minSalary: data.minSalary,
+        experienceLevel: data.experienceLevel,
       },
     });
   }

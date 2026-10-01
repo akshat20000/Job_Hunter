@@ -72,6 +72,7 @@ model SearchProfile {
   boards     String[] @default([]) // linkedin | greenhouse | lever
   remoteOnly Boolean  @default(false)
   minSalary  Int?
+  experienceLevel String?
   updatedAt  DateTime @updatedAt
   createdAt  DateTime @default(now())
 }

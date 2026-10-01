@@ -20,6 +20,19 @@
  */
 
 export const GREENHOUSE_COMPANY_WATCHLIST: string[] = [
+  'razorpay',
+  'swiggy',
+  'cred',
+  'meesho',
+  'postman',
+  'zepto',
+  'browserstack',
+  'phonepe',
+  'urbancompany',
+  'inmobi',
+  'groww',
+  'sliceit',
+  'juspay',
   'stripe',
   'airbnb',
   'robinhood',
@@ -30,8 +43,12 @@ export const GREENHOUSE_COMPANY_WATCHLIST: string[] = [
 ];
 
 export const LEVER_COMPANY_WATCHLIST: string[] = [
+  'atlassian',
+  'hotstar',
+  'airmeet',
+  'clevertap',
+  'rippling',
   'netflix',
   'box',
   'eventbrite',
-  'rippling',
 ];

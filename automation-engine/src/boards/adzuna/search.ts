@@ -77,7 +77,10 @@ export async function scrapeAdzuna(
       params.set('where', location);
     }
 
-    const apiUrl = `https://api.adzuna.com/v1/api/jobs/${env.ADZUNA_COUNTRY}/search/1?${params.toString()}`;
+    const isIndiaLocation = /\b(india|bangalore|bengaluru|mumbai|delhi|hyderabad|pune|gurgaon|gurugram|noida|chennai|kolkata|ahmedabad)\b/i.test(location);
+    const country = isIndiaLocation ? 'in' : (env.ADZUNA_COUNTRY || 'in');
+
+    const apiUrl = `https://api.adzuna.com/v1/api/jobs/${country}/search/1?${params.toString()}`;
     const response = await fetch(apiUrl);
 
     if (!response.ok) {

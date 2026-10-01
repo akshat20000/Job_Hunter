@@ -38,9 +38,10 @@ router.post('/start', requireUserId, async (req: Request, res: Response) => {
 
   try {
     const activeResume = await resumeRepo.findActiveByUser(userId);
-    if (!activeResume) {
+    const resumeText = (activeResume?.content || activeResume?.parsedText || '').trim();
+    if (!activeResume || !resumeText) {
       res.status(400).json({
-        error: 'No resume on file. Upload a resume before starting a job search.',
+        error: 'No resume on file. Upload a resume in Onboarding or Settings before starting a job search.',
       });
       return;
     }
@@ -102,6 +103,7 @@ router.post('/start', requireUserId, async (req: Request, res: Response) => {
       searchQueries: profile.titles,
       locations,
       limit: maxResultsPerBoard,
+      experienceLevel: profile.experienceLevel || undefined,
       userId,
     });
 

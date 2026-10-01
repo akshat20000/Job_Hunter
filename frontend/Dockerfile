@@ -6,6 +6,9 @@ RUN npm ci
 
 COPY . .
 
+# Generate Prisma client
+RUN npx prisma generate
+
 # Build args become env vars for next build
 ARG NEXTAUTH_URL
 ARG NEXTAUTH_SECRET

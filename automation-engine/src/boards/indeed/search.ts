@@ -53,7 +53,9 @@ export async function scrapeIndeed(
       sort: 'date',
     });
 
-    const url = `https://www.indeed.com/jobs?${params.toString()}`;
+    const isIndia = /india|bangalore|bengaluru|delhi|mumbai|hyderabad|pune|noida|gurgaon|gurugram|chennai|kolkata|ahmedabad/i.test(location);
+    const domain = isIndia ? 'https://in.indeed.com' : 'https://www.indeed.com';
+    const url = `${domain}/jobs?${params.toString()}`;
 
     const response = await fetch(url, {
       headers: {
@@ -98,8 +100,8 @@ export async function scrapeIndeed(
               ? decodeEntities(job.salarySnippet.text)
               : undefined,
             url: job.link
-              ? `https://www.indeed.com${job.link}`
-              : `https://www.indeed.com/viewjob?jk=${job.jobkey}`,
+              ? `${domain}${job.link}`
+              : `${domain}/viewjob?jk=${job.jobkey}`,
           });
         }
       } catch {
@@ -124,7 +126,7 @@ export async function scrapeIndeed(
           companyWebsite: undefined,
           location: decodeEntities(rawLocation || location),
           salary: undefined,
-          url: `https://www.indeed.com/viewjob?jk=${jobKey}`,
+          url: `${domain}/viewjob?jk=${jobKey}`,
         });
       }
     }

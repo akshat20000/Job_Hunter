@@ -13,6 +13,7 @@ import { scrapeRemoteOK } from '../boards/remoteok/search.js';
 import { scrapeIndeed } from '../boards/indeed/search.js';
 import { scrapeGlassdoor } from '../boards/glassdoor/search.js';
 import { scrapeUSAJobs } from '../boards/usajobs/search.js';
+import { scrapeAdzuna } from '../boards/adzuna/search.js';
 
 export type BoardName =
   | 'linkedin'
@@ -21,13 +22,15 @@ export type BoardName =
   | 'remoteok'
   | 'indeed'
   | 'glassdoor'
-  | 'usajobs';
+  | 'usajobs'
+  | 'adzuna';
 
 export interface ScrapeJobData {
   boards: BoardName[];
   searchQueries?: string[];
   locations?: string[];
   limit?: number;
+  experienceLevel?: string;
   /** userId to associate scraped applications with. Falls back to DEFAULT_USER_ID env var. */
   userId?: string;
 }
@@ -45,6 +48,7 @@ export class ScrapeWorker extends BaseWorker<ScrapeJobData, void> {
       searchQueries = ['Software Engineer'],
       locations = ['Remote'],
       limit = 5,
+      experienceLevel,
       userId: jobUserId,
     } = job.data;
 
@@ -59,10 +63,20 @@ export class ScrapeWorker extends BaseWorker<ScrapeJobData, void> {
       );
     }
 
+    const effectiveQueries = searchQueries.map((query) => {
+      if (!experienceLevel || experienceLevel === 'mid') return query;
+      const hasSeniority = /\b(junior|entry|intern|senior|lead|principal|staff)\b/i.test(query);
+      if (hasSeniority) return query;
+      if (experienceLevel === 'entry') return `Junior ${query}`;
+      if (experienceLevel === 'senior') return `Senior ${query}`;
+      if (experienceLevel === 'lead') return `Lead ${query}`;
+      return query;
+    });
+
     console.log(
       `🔍 [ScrapeWorker] Executing scrape for boards: ${boards.join(', ')} | ` +
-      `Queries: ${searchQueries.join(', ')} | Locations: ${locations.join(', ')} | User: ${userId} | ` +
-      `Max results/board: ${limit}`
+      `Queries: ${effectiveQueries.join(', ')} (Experience Level: ${experienceLevel || 'all'}) | ` +
+      `Locations: ${locations.join(', ')} | User: ${userId} | Max results/board: ${limit}`
     );
 
     for (const board of boards) {
@@ -71,10 +85,10 @@ export class ScrapeWorker extends BaseWorker<ScrapeJobData, void> {
       // but stop persisting/showing results for this board once we hit it.
       let boardResultCount = 0;
 
-      for (const searchQuery of searchQueries) {
+      for (const searchQuery of effectiveQueries) {
         if (boardResultCount >= limit) break;
         // Some boards support location filtering, others don't
-        const locationsToTry = ['indeed', 'usajobs', 'glassdoor'].includes(board)
+        const locationsToTry = ['indeed', 'usajobs', 'glassdoor', 'adzuna'].includes(board)
           ? locations
           : [locations[0]];
 
@@ -104,6 +118,9 @@ export class ScrapeWorker extends BaseWorker<ScrapeJobData, void> {
                 break;
               case 'usajobs':
                 scrapedJobs = await scrapeUSAJobs(searchQuery, location, remaining);
+                break;
+              case 'adzuna':
+                scrapedJobs = await scrapeAdzuna(searchQuery, location, remaining);
                 break;
               default:
                 console.warn(`⚠️ [ScrapeWorker] Unknown board "${board}", skipping.`);

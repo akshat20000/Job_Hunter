@@ -30,7 +30,10 @@ generator = CoverLetterGenerator()
 async def generate_artifacts(request: GenerateArtifactsRequest):
     resume_content = request.resume_content.strip() if request.resume_content else ""
     if not resume_content:
-        resume_content = get_master_resume()
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Candidate resume content is required to generate artifacts. Please upload your resume first."
+        )
 
     output_dir = request.output_dir
     if not output_dir:

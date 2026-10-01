@@ -6,17 +6,25 @@ import { useRouter } from 'next/navigation';
 
 export const dynamic = 'force-dynamic';
 
-const BOARDS = ['greenhouse', 'lever', 'remoteok', 'indeed', 'glassdoor', 'usajobs', 'linkedin'] as const;
+const BOARDS = ['greenhouse', 'lever', 'remoteok', 'indeed', 'glassdoor', 'usajobs', 'linkedin', 'adzuna'] as const;
 
 const BOARD_LABELS: Record<string, string> = {
-  greenhouse: 'Greenhouse (Company Career Pages)',
-  lever: 'Lever (Company Career Pages)',
+  greenhouse: 'Greenhouse (Career Pages)',
+  lever: 'Lever (Career Pages)',
   remoteok: 'RemoteOK (Remote Jobs)',
   indeed: 'Indeed',
   glassdoor: 'Glassdoor',
   usajobs: 'USAJobs (Government)',
   linkedin: 'LinkedIn',
+  adzuna: 'Adzuna (India & Global Aggregator)',
 };
+
+const EXPERIENCE_LEVELS = [
+  { id: 'entry', label: 'Entry Level (0-2 yrs)' },
+  { id: 'mid', label: 'Mid Level (2-5 yrs)' },
+  { id: 'senior', label: 'Senior Level (5-8 yrs)' },
+  { id: 'lead', label: 'Lead / Principal (8+ yrs)' },
+] as const;
 
 export default function OnboardingPage() {
   const { data: session, status } = useSession();
@@ -38,9 +46,10 @@ export default function OnboardingPage() {
   // Search profile
   const [titles, setTitles] = useState('');
   const [locations, setLocations] = useState('');
-  const [boards, setBoards] = useState<string[]>(['greenhouse', 'lever', 'remoteok', 'indeed']);
+  const [boards, setBoards] = useState<string[]>(['greenhouse', 'lever', 'remoteok', 'indeed', 'adzuna']);
   const [remoteOnly, setRemoteOnly] = useState(false);
   const [minSalary, setMinSalary] = useState('');
+  const [experienceLevel, setExperienceLevel] = useState<string>('mid');
   const [profileSaving, setProfileSaving] = useState(false);
   const [profileError, setProfileError] = useState('');
 
@@ -109,6 +118,7 @@ export default function OnboardingPage() {
           boards,
           remoteOnly,
           minSalary: minSalary ? parseInt(minSalary) : null,
+          experienceLevel,
         }),
       });
       if (!res.ok) {
@@ -253,10 +263,37 @@ export default function OnboardingPage() {
                 id="job-locations"
                 type="text"
                 className="form-input"
-                placeholder="Remote, New York, London"
+                placeholder="e.g. Remote, Bangalore, Delhi, Mumbai"
                 value={locations}
                 onChange={e => setLocations(e.target.value)}
               />
+            </div>
+
+            <div className="form-group">
+              <label className="form-label">Experience Level</label>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                {EXPERIENCE_LEVELS.map(exp => (
+                  <button
+                    key={exp.id}
+                    id={`exp-${exp.id}`}
+                    type="button"
+                    onClick={() => setExperienceLevel(exp.id)}
+                    style={{
+                      padding: '8px 16px',
+                      borderRadius: 'var(--radius-sm)',
+                      border: `1px solid ${experienceLevel === exp.id ? 'var(--accent)' : 'var(--border)'}`,
+                      background: experienceLevel === exp.id ? 'var(--accent-light)' : '#ffffff',
+                      color: experienceLevel === exp.id ? 'var(--accent)' : 'var(--text-muted)',
+                      cursor: 'pointer',
+                      fontSize: 13,
+                      fontWeight: experienceLevel === exp.id ? 600 : 500,
+                      transition: 'all 0.15s',
+                    }}
+                  >
+                    {exp.label}
+                  </button>
+                ))}
+              </div>
             </div>
 
             <div className="form-group">

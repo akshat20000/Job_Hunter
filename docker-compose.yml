@@ -75,6 +75,7 @@ services:
       - "8000:8000"
     volumes:
       - ./brain-engine/resumes:/usr/src/app/brain-engine/resumes
+      - ./brain-engine/resumes:/usr/src/app/resumes
       - ./storage:/usr/src/app/storage
     restart: unless-stopped
 
@@ -108,6 +109,10 @@ services:
       - AWS_SECRET_ACCESS_KEY=${MINIO_ROOT_PASSWORD:-minioadmin}
       - PREMIUM_DAILY_LIMIT=${PREMIUM_DAILY_LIMIT:-50}
       - DEFAULT_USER_ID=${DEFAULT_USER_ID}
+      - ADZUNA_APP_ID=${ADZUNA_APP_ID}
+      - ADZUNA_APP_KEY=${ADZUNA_APP_KEY}
+      - ADZUNA_COUNTRY=${ADZUNA_COUNTRY:-in}
+      - STORAGE_DIR=/usr/src/app/storage
     ports:
       - "3000:3000"
       - "3001:3001"

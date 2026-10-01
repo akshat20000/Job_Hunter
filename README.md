@@ -1,6 +1,21 @@
 # AI Job Agent
 
-An automated job search and application suite that scrapes job boards (LinkedIn, Greenhouse, Lever), semantic-evaluates job fit using local sentence embeddings, tailors cover letters and resumes using Groq LLM completions, compiles professional PDFs, and auto-submits applications using Playwright browser automation.
+An automated, intelligent job discovery and application platform that searches job boards across global and Indian tech markets (Adzuna, Indeed, Greenhouse, Lever, RemoteOK, LinkedIn), evaluates job fit using local vector embeddings, tailors cover letters and resumes to match job descriptions using Groq LLMs, compiles professional PDFs, and provides an end-to-end user dashboard.
+
+---
+
+## Features
+
+- **User-Uploaded Resumes**: Candidates upload their own resume (PDF or DOCX) during onboarding or in Settings. The system extracts the text and uses your actual experience and skills for semantic scoring and document tailoring—no hardcoded master resumes needed.
+- **Indian & Global Region Support**: 
+  - Full Adzuna API integration configured for Indian tech listings (Bangalore, Hyderabad, Pune, Mumbai, Delhi/NCR, etc.) and global markets.
+  - Indian Indeed integration (`in.indeed.com`) with automated regional location detection.
+  - Curated Indian tech watchlist (Razorpay, Swiggy, CRED, Meesho, Postman, Zepto, BrowserStack, PhonePe, Urban Company, InMobi, Groww, Juspay, and more) plus global tech leaders.
+- **Experience Level Customization**: Set your seniority level during onboarding (`Entry Level`, `Mid Level`, `Senior Level`, `Lead / Principal`) and adjust it anytime in Search Preferences to tailor search queries and matching criteria.
+- **AI Fit Evaluation**: Two-stage evaluation using local MiniLM sentence embeddings for fast semantic pre-filtering and Groq LLMs for detailed fit grading and feedback.
+- **Automated Document Tailoring**: Brain Engine dynamically tailors resumes and drafts tailored cover letters targeting specific job requirements, compiled into PDFs via FPDF2.
+- **On-Demand Artifacts & Previews**: View and download tailored resumes and cover letters directly from the dashboard, with automatic on-demand generation.
+- **Modern Next.js Dashboard**: User authentication, one-time onboarding workflow, real-time application pipeline tracking, daily quota tracking, and full settings management.
 
 ---
 
@@ -8,132 +23,141 @@ An automated job search and application suite that scrapes job boards (LinkedIn,
 
 ```mermaid
 graph TD
-  A[Scrape Worker] -->|Scrapes boards| B[Database / Jobs]
-  A -->|Enqueues Job ID| C[AI Queue]
+  A[Scrape Worker] -->|Searches Adzuna, Indeed, Greenhouse, Lever, RemoteOK| B[Database / Jobs]
+  A -->|Enqueues Job ID + User ID| C[AI Queue]
   C -->|Picks up| D[AI Worker]
-  D -->|Calls evaluate API| E[FastAPI Brain Engine]
-  E -->|Runs miniLM semantic similarity| E
+  D -->|Calls evaluate API with User Resume| E[FastAPI Brain Engine]
+  E -->|Runs MiniLM semantic similarity| E
   E -->|Grades fit via Groq LLM| E
   D -->|Score >= 70| F[Tailor Queue]
   F -->|Picks up| G[Resume Worker]
-  G -->|Calls generate-artifacts API| E
-  E -->|Rewrites bullet points via Groq| E
+  G -->|Calls generate-artifacts API with User Resume| E
+  E -->|Tailors resume bullets via Groq| E
   E -->|Drafts cover letter via Groq| E
   E -->|Compiles PDFs via FPDF2| E
-  G -->|Saves PDF paths| H[Apply Queue]
+  G -->|Saves PDF paths to storage| H[Apply Queue]
   H -->|Picks up| I[Apply Worker]
-  I -->|Executes Playwright| J[Job Board Submission]
-  J -->|Takes screenshot proof| K[Database / Application]
-  K -->|Enqueues notification| L[Notification Queue]
-  L -->|Picks up| M[Notification Worker]
-  M -->|Sends SMTP Email outcome| N[Candidate Inbox]
+  I -->|Auto-applies or awaits user approval| J[Application Tracking]
 ```
 
-- **`automation-engine/`**: TypeScript backend orchestrating pipeline stages via BullMQ job queues and workers. Integrates Playwright browser scripts and Prisma client databases.
-- **`brain-engine/`**: Python/FastAPI service hosting the semantic search vector calculator (local MiniLM-L6) and API call completions to Groq for tailoring documents and compiling PDFs.
+- **`frontend/`**: Next.js 14 web application with NextAuth, onboarding flow, interactive dashboard, PDF preview modal, and search settings.
+- **`automation-engine/`**: TypeScript/Node.js backend orchestrating BullMQ job queues, scraping workers, Prisma ORM, and MinIO/S3 resume storage.
+- **`brain-engine/`**: Python/FastAPI service hosting the semantic embedding models and Groq LLM integrations for resume evaluation and PDF compilation.
 
 ---
 
 ## State Machine Pipeline
 
-Every job application transitions through the following stages:
+Every job application transitions through clear states:
 `FOUND` ➔ `MATCHED` ➔ `TAILORED` ➔ `READY` ➔ `APPLYING` ➔ `SUBMITTED`
 
-- **FOUND**: Crawled listing saved to database.
-- **MATCHED**: Evaluated by AI and matched fit threshold (>= 70%).
-- **TAILORED**: Custom, high-alignment resume markdown and cover letters generated.
-- **READY**: Tailored cover letter and resume compiled into PDFs.
-- **APPLYING**: Browser submission currently active via Playwright.
-- **SUBMITTED**: Form successfully completed, confirmation screenshot saved.
-- **FAILED**: Terminal error state during evaluate, compile, or apply.
+- **FOUND**: Job listing discovered and saved to database.
+- **MATCHED**: Evaluated against candidate's uploaded resume with score >= 70%.
+- **TAILORED**: Custom bullet points and cover letter created for the role.
+- **READY**: Tailored PDF resume and cover letter compiled and ready for review/apply.
+- **APPLYING**: Browser submission active via Playwright (for supported boards).
+- **SUBMITTED**: Application successfully completed.
+- **FAILED**: Rejected due to low fit score or error.
 
 ---
 
 ## Getting Started
 
 ### Prerequisites
-- Node.js (v18+)
-- Python (3.10+)
-- Docker and Docker Compose
-- Groq API Key
+- [Docker Desktop](https://www.docker.com/products/docker-desktop/) (recommended for containerized deployment)
+- Node.js (v18+) & Python (v3.10+) if running services directly on host
+- Groq API Key ([console.groq.com](https://console.groq.com/))
+- Adzuna Developer Credentials ([developer.adzuna.com](https://developer.adzuna.com/)) for broad job search (India & Global)
 
 ---
 
-### Step 1: Clone and Set Up Databases
+### Step 1: Environment Configuration
 
-1. **Clone the repository** and navigate to the directory.
-2. **Launch Postgres & Redis databases** using Docker Compose:
-   ```bash
-   docker-compose up -d
-   ```
-3. **Configure the Environment**:
-   Copy `.env.example` to `.env` in the root folder:
-   ```bash
-   cp .env.example .env
-   ```
-   *Fill out database credentials, SMTP accounts, and your Groq API Key (see below).*
+Copy `.env.example` to `.env` in the root repository folder:
+```bash
+cp .env.example .env
+```
 
----
+Ensure the following key variables are configured:
+```env
+# Groq API Configuration
+GROQ_API_KEY=your_groq_api_key_here
+GROQ_MODEL=qwen/qwen3.8-27b
 
-### Step 2: How to Get a Free Groq API Key
+# Adzuna API Configuration (India & Global aggregator)
+ADZUNA_APP_ID=your_adzuna_app_id
+ADZUNA_APP_KEY=your_adzuna_app_key
+ADZUNA_COUNTRY=in
 
-1. Navigate to the **[Groq Console](https://console.groq.com/)**.
-2. Sign in or create a free account.
-3. Go to **API Keys** in the sidebar.
-4. Click **Create API Key**, name it `ai-job-agent`, and copy the string.
-5. Paste it in your `.env` file under `GROQ_API_KEY`.
-
----
-
-### Step 3: Populate Your Master Resume
-
-The AI needs your real skills to run evaluations and tailoring.
-1. Open the file [master.md](file:///e:/My_personal/Projects/ongoing/ai-job-agent/brain-engine/resumes/master.md).
-2. Populate it with your actual resume sections in markdown formatting.
-   *Do not leave this file empty, otherwise AI endpoints will return validation errors.*
+# NextAuth
+NEXTAUTH_SECRET=your_nextauth_secret
+NEXTAUTH_URL=http://localhost:3002
+```
 
 ---
 
-### Step 4: Boot up the Brain Engine (Python)
+### Step 2: Start with Docker Compose (Recommended)
 
-1. Navigate to `brain-engine/` and establish a virtual environment:
+1. Build and boot all services:
    ```bash
-   cd brain-engine
-   python -m venv venv
-   source venv/bin/activate  # On Windows: .\venv\Scripts\activate
+   docker compose up -d --build
    ```
-2. Install Python dependencies:
-   ```bash
-   pip install -r requirements.txt
-   ```
-3. Start the FastAPI development server:
-   ```bash
-   python main.py
-   ```
-   *The server runs on `http://localhost:8000`. You can inspect endpoints via `http://localhost:8000/docs`.*
+
+2. The services will be accessible at:
+   - **Frontend Dashboard**: `http://localhost:3002`
+   - **Automation Engine API**: `http://localhost:3000`
+   - **Brain Engine Docs**: `http://localhost:8000/docs`
+   - **MinIO Storage Console**: `http://localhost:9001` (login: `minioadmin` / `minioadmin`)
 
 ---
 
-### Step 5: Boot up the Automation Engine (TypeScript)
+### Step 3: Candidate Onboarding Flow
 
-1. Navigate to `automation-engine/` and install node packages:
-   ```bash
-   cd ../automation-engine
-   npm install
-   ```
-2. Run database migrations to prepare tables:
-   ```bash
-   npm run db:migrate
-   ```
-3. Seed default database rows (like the master resume schema):
-   ```bash
-   npm run db:seed
-   ```
-4. Start the development server and queue listeners:
-   ```bash
-   npm run dev
-   ```
-   *The workers are now listening on BullMQ. The health check server runs on `http://localhost:3000`.*
+1. Navigate to **`http://localhost:3002`** and register/sign in.
+2. The initial login initiates the **one-time onboarding**:
+   - **Upload Resume**: Upload your real resume (`.pdf` or `.docx`). The system parses and stores your text.
+   - **Job Titles**: Specify your target roles (e.g. `Software Engineer, Backend Developer`).
+   - **Locations**: Specify target cities or regions (e.g. `Bangalore, Hyderabad, Remote, India`).
+   - **Experience Level**: Select your seniority (`Entry`, `Mid`, `Senior`, `Lead`).
+   - **Job Boards**: Choose sources (Adzuna, Indeed, Greenhouse, Lever, RemoteOK, etc.).
+3. Once completed, your dashboard displays live matches and evaluation scores. You can update any of these preferences or upload a new resume anytime in **Settings** (`/settings`).
+
+---
+
+## Running Services Directly on Host (Without Docker)
+
+### 1. Database & Cache
+Ensure PostgreSQL (port 5432), Redis (port 6379), and MinIO (port 9000) are running.
+
+### 2. Brain Engine (Python)
+```bash
+cd brain-engine
+python -m venv venv
+# Windows:
+.\venv\Scripts\activate
+# Linux/macOS:
+source venv/bin/activate
+
+pip install -r requirements.txt
+python main.py
+```
+
+### 3. Automation Engine (Node.js / TypeScript)
+```bash
+cd automation-engine
+npm install
+npx prisma generate
+npx prisma db push
+npm run dev
+```
+
+### 4. Frontend (Next.js)
+```bash
+cd frontend
+npm install
+npx prisma generate
+npm run dev
+```
 
 ---
 
@@ -152,10 +176,6 @@ The AI needs your real skills to run evaluations and tailoring.
 
 ---
 
-## ⚠️ LinkedIn Automation Disclaimer
+## ⚠️ LinkedIn Policy Notice
 
-Automated LinkedIn interaction violates their Terms of Service and commonly triggers CAPTCHA challenges, rate-limiting, or account suspensions. 
-To protect your account:
-- Keep `LINKEDIN_AUTOMATION_ENABLED=false` (default) until you are ready.
-- Basic safeguards like randomized typing delays and realistic user-agents are integrated.
-- Set `PLAYWRIGHT_HEADLESS=false` to manually solve CAPTCHA windows in headful mode if they appear.
+Auto-submission on LinkedIn is disabled by default to respect platform policies and protect user accounts. LinkedIn listings reach `READY` status on the dashboard where users can review the tailored resume/cover letter and click through to submit manually. Greenhouse and Lever career page applications can auto-apply when enabled.

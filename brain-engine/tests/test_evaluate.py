@@ -25,7 +25,7 @@ def test_evaluate_endpoint(mock_get_resume, mock_evaluate_fit):
         json={
             "job_title": "Python Dev",
             "job_description": "Requires Python expertise",
-            "resume_content": ""
+            "resume_content": "Candidate: Senior engineer with Python expertise."
         }
     )
 
